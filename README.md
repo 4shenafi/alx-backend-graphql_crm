@@ -1,68 +1,98 @@
-# GraphQL CRM System
+# alx-backend-graphql_crm
 
-A Django-based Customer Relationship Management (CRM) system with GraphQL API integration.
 
-## Features
+Task 1: Build and Seed a CRM Database with GraphQL Integration
+mandatory
+Objective
+Enhance the CRM system by adding GraphQL mutations to create Customer, Product, and Order instances. This includes:
 
-- **GraphQL API**: Single endpoint for all data operations
-- **Customer Management**: Create, read, update customers with validation
-- **Product Management**: Manage products with pricing and inventory
-- **Order Management**: Create orders with multiple products
-- **Advanced Filtering**: Filter customers, products, and orders with various criteria
-- **Bulk Operations**: Bulk customer creation with partial success handling
-- **Data Validation**: Comprehensive validation for all inputs
+Bulk customer creation
+Nested order creation with product associations
+Robust validation and error handling
+Instructions
+1. Define the Mutations
+In crm/schema.py, create the following mutation classes:
 
-## Setup Instructions
+CreateCustomer
+Inputs:
+name (required, string)
+email (required, unique email)
+phone (optional, string)
+Validations:
+Ensure email is unique.
+Validate phone format (e.g., +1234567890 or 123-456-7890).
+Behavior:
+Saves the customer to the database.
+Returns the created customer object and a success message.
+Think: How will you handle validation errors (e.g., duplicate email)?
+BulkCreateCustomers
+Inputs:
+A list of customers, each with name, email, and optional phone.
+Behavior:
+Validates each customer’s data.
+Creates customers in a single transaction.
+Returns:
+List of successfully created customers.
+List of errors for failed records.
+Challenge: Support partial success — create valid entries even if some fail.
+CreateProduct
+Inputs:
+name (required, string)
+price (required, positive decimal)
+stock (optional, non-negative integer, default: 0)
+Validations:
+Ensure price is positive and stock is not negative.
+Behavior:
+Saves the product to the database.
+Returns the created product object.
+CreateOrder
+Inputs:
+customer_id (required, existing customer ID)
+product_ids (required, list of existing product IDs)
+order_date (optional, defaults to now)
+Validations:
+Ensure customer and product IDs are valid.
+Ensure at least one product is selected.
+Behavior:
+Creates an order.
+Associates specified products.
+Calculates total_amount as the sum of product prices.
+Returns the created order object with nested customer and product data.
+Think: How will you ensure the total_amount is accurate?
+Challenge: Implement custom error handling with user-friendly messages (e.g., “Email already exists”, “Invalid product ID”).
+2. Add Mutations to the Schema
+In crm/schema.py:
 
-1. **Install Dependencies**
-   ```bash
-   pip install -r requirements.txt
-   ```
+Define a Mutation class.
+Add mutation fields:
+class Mutation(graphene.ObjectType):
+    create_customer = CreateCustomer.Field()
+    bulk_create_customers = BulkCreateCustomers.Field()
+    create_product = CreateProduct.Field()
+    create_order = CreateOrder.Field()
+Hint: Use Graphene’s Field and List types appropriately.
+3. Integrate Into Main Schema
+In graphql_crm/schema.py:
 
-2. **Run Migrations**
-   ```bash
-   python manage.py makemigrations
-   python manage.py migrate
-   ```
+Import Query and Mutation from crm.schema.
+Combine them:
+import graphene
+from crm.schema import Query as CRMQuery, Mutation as CRMMutation
 
-3. **Seed Database (Optional)**
-   ```bash
-   python seed_db.py
-   ```
+class Query(CRMQuery, graphene.ObjectType):
+    pass
 
-4. **Start Development Server**
-   ```bash
-   python manage.py runserver
-   ```
+class Mutation(CRMMutation, graphene.ObjectType):
+    pass
 
-5. **Access GraphQL Interface**
-   - Open your browser and go to: `http://localhost:8000/graphql`
-   - Use the GraphiQL interface to test queries and mutations
-
-## GraphQL Schema
-
-### Queries
-
-- `hello`: Returns a greeting message
-- `allCustomers`: Get all customers with filtering options
-- `allProducts`: Get all products with filtering options
-- `allOrders`: Get all orders with filtering options
-
-### Mutations
-
-- `createCustomer`: Create a single customer
-- `bulkCreateCustomers`: Create multiple customers at once
-- `createProduct`: Create a new product
-- `createOrder`: Create an order with products
-
-### Example Queries
-
-#### Create a Customer
-```graphql
+schema = graphene.Schema(query=Query, mutation=Mutation)
+Think: Ensure support for nested objects and graceful error handling.
+Checkpoint: Test Mutations at /graphql
+# Create a single customer
 mutation {
   createCustomer(input: {
-    name: "John Doe"
-    email: "john@example.com"
+    name: "Alice",
+    email: "alice@example.com",
     phone: "+1234567890"
   }) {
     customer {
@@ -74,29 +104,42 @@ mutation {
     message
   }
 }
-```
 
-#### Filter Customers
-```graphql
-query {
-  allCustomers(filter: { nameIcontains: "John" }) {
-    edges {
-      node {
-        id
-        name
-        email
-        createdAt
-      }
+# Bulk create customers
+mutation {
+  bulkCreateCustomers(input: [
+    { name: "Bob", email: "bob@example.com", phone: "123-456-7890" },
+    { name: "Carol", email: "carol@example.com" }
+  ]) {
+    customers {
+      id
+      name
+      email
+    }
+    errors
+  }
+}
+
+# Create a product
+mutation {
+  createProduct(input: {
+    name: "Laptop",
+    price: 999.99,
+    stock: 10
+  }) {
+    product {
+      id
+      name
+      price
+      stock
     }
   }
 }
-```
 
-#### Create an Order
-```graphql
+# Create an order with products
 mutation {
   createOrder(input: {
-    customerId: "1"
+    customerId: "1",
     productIds: ["1", "2"]
   }) {
     order {
@@ -113,47 +156,7 @@ mutation {
     }
   }
 }
-```
+Repo:
 
-## Project Structure
-
-```
-alx-backend-graphql_crm/
-├── alx_backend_graphql_crm/
-│   ├── __init__.py
-│   ├── settings.py
-│   ├── urls.py
-│   ├── wsgi.py
-│   ├── asgi.py
-│   └── schema.py
-├── crm/
-│   ├── __init__.py
-│   ├── models.py
-│   ├── schema.py
-│   ├── filters.py
-│   ├── admin.py
-│   ├── apps.py
-│   ├── views.py
-│   ├── urls.py
-│   └── tests.py
-├── manage.py
-├── requirements.txt
-├── seed_db.py
-└── README.md
-```
-
-## Technologies Used
-
-- **Django**: Web framework
-- **GraphQL**: Query language and runtime
-- **Graphene-Django**: GraphQL integration for Django
-- **Django-Filter**: Advanced filtering capabilities
-- **SQLite**: Database (default)
-
-## Validation Rules
-
-- **Email**: Must be unique across customers
-- **Phone**: Must match format like `+1234567890` or `123-456-7890`
-- **Price**: Must be positive
-- **Stock**: Must be non-negative
-- **Orders**: Must have at least one product and valid customer
+GitHub repository: alx-backend-graphql_crm
+File: models.py,schema.py, graphql_crm/schema.py, seed_db.py
