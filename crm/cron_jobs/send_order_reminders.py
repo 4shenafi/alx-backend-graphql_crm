@@ -30,13 +30,17 @@ def main():
     # GraphQL query for recent orders
     query = gql(
         """
-        query GetRecentOrders($cutoff: DateTime!) {
-          orders(filter: {orderDate_Gte: $cutoff}) {
-            id
-            customer {
-              email
+        query GetRecentOrders {
+          allOrders {
+            edges {
+              node {
+                id
+                customer {
+                  email
+                }
+                orderDate
+              }
             }
-            orderDate
           }
         }
         """
@@ -44,16 +48,22 @@ def main():
 
     # Execute query
     try:
-        result = client.execute(query, variable_values={"cutoff": cutoff_date})
+        result = client.execute(query)
 
-        orders = result.get("orders", [])
+        orders = result.get("allOrders", {}).get("edges", [])
         if not orders:
             logging.info("No recent orders found.")
         else:
-            for order in orders:
+            for order_edge in orders:
+                order = order_edge["node"]
                 order_id = order["id"]
                 customer_email = order["customer"]["email"]
-                logging.info(f"Reminder for Order #{order_id} - Customer: {customer_email}")
+                order_date = order["orderDate"]
+                
+                # Check if order is within last 7 days
+                order_datetime = datetime.fromisoformat(order_date.replace('Z', '+00:00'))
+                if order_datetime >= datetime.now() - timedelta(days=7):
+                    logging.info(f"Reminder for Order #{order_id} - Customer: {customer_email}")
 
         print("Order reminders processed!")
 

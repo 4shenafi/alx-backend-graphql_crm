@@ -1,11 +1,8 @@
 #!/bin/bash
 
-# Navigate to project root (adjust path if needed)
+# Navigate to project root
 PROJECT_DIR="$(dirname "$(dirname "$(realpath "$0")")")"
 cd "$PROJECT_DIR" || exit 1
-
-# Navigate to project root
-# cd "C:/Users/HP/Desktop/ALX Prodev program/alx-backend-graphql_crm" || exit 1
 
 # Run Django shell command to delete inactive customers
 DELETED_COUNT=$(python manage.py shell -c "
@@ -21,4 +18,4 @@ print(count)
 ")
 
 # Log result with timestamp
-echo \"\$(date '+%Y-%m-%d %H:%M:%S') - Deleted customers: $DELETED_COUNT\" >> /tmp/customer_cleanup_log.txt
+echo "$(date '+%Y-%m-%d %H:%M:%S') - Deleted customers: $DELETED_COUNT" >> /tmp/customer_cleanup_log.txt
