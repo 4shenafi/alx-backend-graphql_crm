@@ -1,76 +1,70 @@
-import json
-from datetime import datetime
-from pathlib import Path
-
-import requests
-from gql.transport.requests import RequestsHTTPTransport
 from gql import gql, Client
+from gql.transport.requests import RequestsHTTPTransport
+import datetime
 
+def log_crm_heartbeat():
+    timestamp = datetime.datetime.now().strftime("%d/%m/%Y-%H:%M:%S")
+    log_message = f"{timestamp} CRM is alive\n"
 
-GRAPHQL_URL = "http://localhost:8000/graphql"
-HEARTBEAT_LOG = Path("/tmp/crm_heartbeat_log.txt")
-LOW_STOCK_LOG = Path("/tmp/low_stock_updates_log.txt")
+    # Append to log file
+    with open("/tmp/crm_heartbeat_log.txt", "a") as f:
+        f.write(log_message)
 
-
-def _timestamp() -> str:
-    return datetime.now().strftime("%d/%m/%Y-%H:%M:%S")
-
-
-def log_crm_heartbeat() -> None:
-    message = f"{_timestamp()} CRM is alive\n"
-    try:
-        HEARTBEAT_LOG.parent.mkdir(parents=True, exist_ok=True)
-        with HEARTBEAT_LOG.open("a", encoding="utf-8") as f:
-            f.write(message)
-    except Exception:
-        pass
-
-    # Optional GraphQL health check (query hello)
-    try:
-        query = "query { hello }"
-        resp = requests.post(
-            GRAPHQL_URL,
-            json={"query": query},
-            timeout=5,
+        # Optional: check GraphQL hello field
+        transport = RequestsHTTPTransport(
+            url="http://localhost:8000/graphql",
+            verify=True,
+            retries=3,
         )
-        _ = resp.json()
-    except Exception:
-        # keep heartbeat log even if GraphQL check fails
-        return
+        client = Client(transport=transport, fetch_schema_from_transport=True)
+        query = gql("{ hello }")
+        try:
+            result = client.execute(query)
+            f.write(f"{timestamp} GraphQL endpoint response: {result}\n")
+        except Exception as e:
+            f.write(f"{timestamp} GraphQL endpoint error: {e}\n")
 
 
-def updatelowstock() -> None:
-    mutation = """
-    mutation UpdateLowStock($inc: Int){
-      updateLowStockProducts(incrementBy: $inc){
-        ok
+def update_low_stock():
+    """
+    Executes the UpdateLowStockProducts mutation via GraphQL
+    and logs updated products to /tmp/low_stock_updates_log.txt
+    """
+    timestamp = datetime.datetime.now().strftime("%d/%m/%Y-%H:%M:%S")
+    log_file = "/tmp/low_stock_updates_log.txt"
+
+    # GraphQL client
+    transport = RequestsHTTPTransport(
+        url="http://localhost:8000/graphql",
+        verify=True,
+        retries=3,
+    )
+    client = Client(transport=transport, fetch_schema_from_transport=True)
+
+    # Mutation
+    mutation = gql("""
+    mutation {
+      updateLowStockProducts {
         message
-        updatedProducts { id name stock }
+        updatedProducts {
+          name
+          stock
+        }
       }
     }
-    """
+    """)
+
     try:
-        resp = requests.post(
-            GRAPHQL_URL,
-            json={"query": mutation, "variables": {"inc": 10}},
-            timeout=15,
-        )
-        data = resp.json()
-        updates = data.get("data", {}).get("updateLowStockProducts", {})
-        products = updates.get("updatedProducts", [])
-        lines = [
-            f"{_timestamp()} Updated: {p.get('name')} -> stock {p.get('stock')}\n"
-            for p in products
-        ]
+        result = client.execute(mutation)
+        updated = result["updateLowStockProducts"]["updatedProducts"]
+
+        with open(log_file, "a") as f:
+            if updated:
+                for prod in updated:
+                    f.write(f"{timestamp}: Product {prod['name']} new stock {prod['stock']}\n")
+            else:
+                f.write(f"{timestamp}: No low-stock products found\n")
+
     except Exception as e:
-        lines = [f"{_timestamp()} Error updating low stock: {e}\n"]
-
-    try:
-        LOW_STOCK_LOG.parent.mkdir(parents=True, exist_ok=True)
-        with LOW_STOCK_LOG.open("a", encoding="utf-8") as f:
-            for line in lines:
-                f.write(line)
-    except Exception:
-        pass
-
-
+        with open(log_file, "a") as f:
+            f.write(f"{timestamp}: Error updating low-stock products: {e}\n")
