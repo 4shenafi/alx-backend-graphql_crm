@@ -1,8 +1,6 @@
 import graphene
-import crm.schema
 
-class Query(crm.schema.Query, graphene.ObjectType):
-    # This will inherit from the CRM app's Query class
-    pass
+class Query(graphene.ObjectType):
+    hello = graphene.String(default_value="Hello, GraphQL!")
 
 schema = graphene.Schema(query=Query)
