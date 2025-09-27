@@ -1,52 +1,28 @@
 from django.db import models
-from django.core.validators import EmailValidator
-from django.core.exceptions import ValidationError
-import re
+from django.utils import timezone
+from decimal import Decimal
 
 class Customer(models.Model):
-    name = models.CharField(max_length=100)
+    name = models.CharField(max_length=150)
     email = models.EmailField(unique=True)
-    phone = models.CharField(max_length=20, blank=True, null=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-    
+    phone = models.CharField(max_length=30, blank=True, null=True)
+
     def __str__(self):
-        return self.name
-    
-    def clean(self):
-        # Validate phone format
-        if self.phone:
-            phone_pattern = r'^(\+\d{1,3}[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}$'
-            if not re.match(phone_pattern, self.phone):
-                raise ValidationError('Invalid phone format. Use formats like +1234567890 or 123-456-7890')
+        return f"{self.name} <{self.email}>"
 
 class Product(models.Model):
-    name = models.CharField(max_length=100)
+    name = models.CharField(max_length=150)
     price = models.DecimalField(max_digits=10, decimal_places=2)
     stock = models.PositiveIntegerField(default=0)
-    created_at = models.DateTimeField(auto_now_add=True)
-    
+
     def __str__(self):
-        return self.name
-    
-    def clean(self):
-        if self.price <= 0:
-            raise ValidationError('Price must be positive')
-        if self.stock < 0:
-            raise ValidationError('Stock cannot be negative')
+        return f"{self.name} ({self.price})"
 
 class Order(models.Model):
-    customer = models.ForeignKey(Customer, on_delete=models.CASCADE)
-    products = models.ManyToManyField(Product)
-    total_amount = models.DecimalField(max_digits=10, decimal_places=2)
-    order_date = models.DateTimeField(auto_now_add=True)
-    
+    customer = models.ForeignKey(Customer, on_delete=models.CASCADE, related_name="orders")
+    products = models.ManyToManyField(Product, related_name="orders")
+    total_amount = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0.00"))
+    order_date = models.DateTimeField(default=timezone.now)
+
     def __str__(self):
-        return f"Order {self.id} - {self.customer.name}"
-    
-    def calculate_total(self):
-        return sum(product.price for product in self.products.all())
-    
-    def save(self, *args, **kwargs):
-        if not self.total_amount:
-            self.total_amount = self.calculate_total()
-        super().save(*args, **kwargs)
+        return f"Order #{self.id} for {self.customer.name}"
