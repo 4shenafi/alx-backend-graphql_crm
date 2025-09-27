@@ -1,44 +1,55 @@
-from datetime import datetime  
-import requests               
 from celery import shared_task
-from gql import gql, Client
-from gql.transport.requests import RequestsHTTPTransport
+import requests
+from datetime import datetime
 
 @shared_task
 def generate_crm_report():
-    """
-    Generates a weekly CRM report with total customers, orders, and revenue.
-    Logs to /tmp/crm_report_log.txt
-    """
-    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    log_file = "/tmp/crm_report_log.txt"
-
-    transport = RequestsHTTPTransport(
-        url="http://localhost:8000/graphql",
-        verify=True,
-        retries=3,
-    )
-    client = Client(transport=transport, fetch_schema_from_transport=True)
-
-    query = gql("""
+    # GraphQL query to get CRM statistics
+    query = """
     query {
-      totalCustomers: customersCount
-      totalOrders: ordersCount
-      totalRevenue: ordersRevenue
+        customers {
+            totalCount
+        }
+        orders {
+            totalCount
+            edges {
+                node {
+                    totalAmount
+                }
+            }
+        }
     }
-    """)
-
+    """
+    
     try:
-        result = client.execute(query)
-        customers = result.get("totalCustomers", 0)
-        orders = result.get("totalOrders", 0)
-        revenue = result.get("totalRevenue", 0)
-
-        log_line = f"{timestamp} - Report: {customers} customers, {orders} orders, {revenue} revenue\n"
-
-        with open(log_file, "a") as f:
-            f.write(log_line)
-
+        response = requests.post(
+            'http://localhost:8000/graphql',
+            json={'query': query},
+            headers={'Content-Type': 'application/json'}
+        )
+        
+        if response.status_code == 200:
+            data = response.json()
+            customer_count = data['data']['customers']['totalCount']
+            order_count = data['data']['orders']['totalCount']
+            
+            # Calculate total revenue
+            revenue = sum(
+                float(order['node']['totalAmount']) 
+                for order in data['data']['orders']['edges']
+            )
+            
+            # Log the report
+            timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            with open('/tmp/crm_report_log.txt', 'a') as f:
+                f.write(f"{timestamp} - Report: {customer_count} customers, {order_count} orders, {revenue:.2f} revenue\n")
+                
+        else:
+            timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            with open('/tmp/crm_report_log.txt', 'a') as f:
+                f.write(f"{timestamp} - Error: Failed to generate report (HTTP {response.status_code})\n")
+                
     except Exception as e:
-        with open(log_file, "a") as f:
-            f.write(f"{timestamp} - Error generating report: {e}\n")
+        timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        with open('/tmp/crm_report_log.txt', 'a') as f:
+            f.write(f"{timestamp} - Exception: {str(e)}\n")
